@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speed Monitor Ultra</title>
+
+<style>
+body{
+    margin:0;
+    background:#0f172a;
+    color:white;
+    font-family:Segoe UI;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+.container{
+    width:90%;
+    max-width:500px;
+    background:#1e293b;
+    padding:20px;
+    border-radius:20px;
+    text-align:center;
+}
+
+canvas{
+    width:200px;
+    height:200px;
+    margin:10px auto;
+}
+
+button{
+    padding:10px 20px;
+    background:#06b6d4;
+    border:none;
+    border-radius:10px;
+    color:white;
+    margin:10px;
+}
+
+.history{
+    margin-top:20px;
+    text-align:left;
+    max-height:150px;
+    overflow:auto;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<h2>Speed Monitor Ultra</h2>
+
+<canvas id="gauge"></canvas>
+<div id="speed">0 Mbps</div>
+
+<button onclick="startTest()">測定開始</button>
+
+<h3>ランキング</h3>
+<div id="ranking"></div>
+
+<h3>履歴</h3>
+<div class="history" id="history"></div>
+</div>
+
+<script>
+const canvas = document.getElementById("gauge");
+const ctx = canvas.getContext("2d");
+
+function drawGauge(value){
+    ctx.clearRect(0,0,200,200);
+    ctx.beginPath();
+    ctx.arc(100,100,80,Math.PI,Math.PI + (value/100)*Math.PI);
+    ctx.strokeStyle="#06b6d4";
+    ctx.lineWidth=10;
+    ctx.stroke();
+}
+
+async function downloadTest(){
+    const url="https://speed.cloudflare.com/__down?bytes=15000000&t="+Math.random();
+    const res=await fetch(url);
+    const reader=res.body.getReader();
+
+    let received=0;
+    let start=performance.now();
+
+    while(true){
+        const {done,value}=await reader.read();
+        if(done) break;
+        received+=value.length;
+
+        let now=performance.now();
+        let speed=(received*8)/((now-start)/1000)/1000000;
+
+        document.getElementById("speed").innerText=speed.toFixed(2)+" Mbps";
+        drawGauge(speed);
+    }
+
+    saveResult(speed);
+}
+
+function saveResult(speed){
+    let history=JSON.parse(localStorage.getItem("speedHistory")||"[]");
+    history.push(speed);
+    localStorage.setItem("speedHistory",JSON.stringify(history));
+    showHistory();
+    showRanking();
+}
+
+function showHistory(){
+    let history=JSON.parse(localStorage.getItem("speedHistory")||"[]");
+    document.getElementById("history").innerHTML=
+        history.map(v=>v.toFixed(2)+" Mbps").join("<br>");
+}
+
+function showRanking(){
+    let history=JSON.parse(localStorage.getItem("speedHistory")||"[]");
+    history.sort((a,b)=>b-a);
+    document.getElementById("ranking").innerHTML=
+        history.slice(0,5).map(v=>"⭐ "+v.toFixed(2)+" Mbps").join("<br>");
+}
+
+async function startTest(){
+    await downloadTest();
+}
+
+// 自動測定（30秒ごと）
+setInterval(()=>{
+    startTest();
+},30000);
+
+showHistory();
+showRanking();
+</script>
+
+</body>
+</html>
