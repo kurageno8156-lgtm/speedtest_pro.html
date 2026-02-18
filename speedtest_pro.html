@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speed Monitor Pro</title>
+
+<style>
+body{
+    margin:0;
+    background:#0f172a;
+    color:white;
+    font-family:Segoe UI;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+.container{
+    width:90%;
+    max-width:500px;
+    background:#1e293b;
+    padding:20px;
+    border-radius:20px;
+    text-align:center;
+}
+
+.value{
+    font-size:40px;
+    margin:10px 0;
+}
+
+button{
+    padding:10px 20px;
+    background:#06b6d4;
+    border:none;
+    border-radius:10px;
+    color:white;
+    margin:10px;
+}
+
+.progress{
+    height:15px;
+    background:#334155;
+    border-radius:10px;
+    overflow:hidden;
+}
+
+.bar{
+    height:100%;
+    width:0%;
+    background:linear-gradient(90deg,#22c55e,#06b6d4);
+}
+
+canvas{
+    width:100%;
+    height:150px;
+    margin-top:20px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<h2>Speed Monitor</h2>
+
+<div>Ping</div>
+<div class="value" id="ping">-- ms</div>
+
+<div>Download</div>
+<div class="value" id="download">0 Mbps</div>
+<div class="progress"><div class="bar" id="downBar"></div></div>
+
+<div>Upload</div>
+<div class="value" id="upload">0 Mbps</div>
+<div class="progress"><div class="bar" id="upBar"></div></div>
+
+<button onclick="startTest()">測定開始</button>
+
+<canvas id="chart"></canvas>
+</div>
+
+<script>
+const ctx = document.getElementById('chart').getContext('2d');
+
+let data = [];
+
+function drawGraph(){
+    ctx.clearRect(0,0,500,150);
+    ctx.beginPath();
+    ctx.moveTo(0,150);
+    data.forEach((v,i)=>{
+        ctx.lineTo(i*10,150 - v*2);
+    });
+    ctx.strokeStyle="#06b6d4";
+    ctx.stroke();
+}
+
+async function pingTest(){
+    let start = performance.now();
+    await fetch("https://speed.cloudflare.com/cdn-cgi/trace?t=" + Math.random());
+    let end = performance.now();
+    document.getElementById("ping").innerText = Math.floor(end-start)+" ms";
+}
+
+async function downloadTest(){
+    const url = "https://speed.cloudflare.com/__down?bytes=20000000&t=" + Math.random();
+    const res = await fetch(url);
+    const reader = res.body.getReader();
+
+    let received = 0;
+    let total = 20000000;
+    let start = performance.now();
+    let last = start;
+    let lastBytes = 0;
+
+    while(true){
+        const {done,value} = await reader.read();
+        if(done) break;
+        received += value.length;
+
+        let now = performance.now();
+        if(now-last>=1000){
+            let speed = ((received-lastBytes)*8)/((now-last)/1000)/1000000;
+            document.getElementById("download").innerText = speed.toFixed(2)+" Mbps";
+            document.getElementById("downBar").style.width=(received/total*100)+"%";
+            data.push(speed);
+            drawGraph();
+            last = now;
+            lastBytes = received;
+        }
+    }
+}
+
+async function uploadTest(){
+    let dataSize = new Uint8Array(5_000_000);
+    let start = performance.now();
+    await fetch("https://httpbin.org/post?t="+Math.random(),{
+        method:"POST",
+        body:dataSize
+    });
+    let end = performance.now();
+    let speed = (dataSize.length*8)/((end-start)/1000)/1000000;
+    document.getElementById("upload").innerText = speed.toFixed(2)+" Mbps";
+    document.getElementById("upBar").style.width="100%";
+}
+
+async function startTest(){
+    data=[];
+    await pingTest();
+    await downloadTest();
+    await uploadTest();
+}
+</script>
+
+</body>
+</html>
