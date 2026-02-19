@@ -1,159 +1,175 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Speed Monitor Pro</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KDSNCC | Global Intelligence AI</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --neon: #00ffcc; --neon-pink: #ff0055; --bg: #05070a; --glass: rgba(255, 255, 255, 0.05); }
+        body { background: var(--bg); color: white; font-family: 'Orbitron', sans-serif; margin: 0; }
+        
+        .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background-image: linear-gradient(var(--glass) 1px, transparent 1px), linear-gradient(90deg, var(--glass) 1px, transparent 1px);
+            background-size: 40px 40px; transform: perspective(500px) rotateX(60deg); transform-origin: top;
+            animation: move 3s linear infinite; z-index: -1; opacity: 0.2; }
+        @keyframes move { from { background-position: 0 0; } to { background-position: 0 40px; } }
 
-<style>
-body{
-    margin:0;
-    background:#0f172a;
-    color:white;
-    font-family:Segoe UI;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
-}
+        .app { max-width: 600px; margin: 20px auto; padding: 20px; }
+        
+        /* 国旗付き言語セレクター */
+        .lang-control { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .lang-label { font-size: 0.7rem; color: var(--neon); letter-spacing: 1px; }
+        select { background: rgba(0,0,0,0.8); color: white; border: 1px solid var(--neon); padding: 10px; border-radius: 8px; cursor: pointer; font-family: sans-serif; }
 
-.container{
-    width:90%;
-    max-width:500px;
-    background:#1e293b;
-    padding:20px;
-    border-radius:20px;
-    text-align:center;
-}
-
-.value{
-    font-size:40px;
-    margin:10px 0;
-}
-
-button{
-    padding:10px 20px;
-    background:#06b6d4;
-    border:none;
-    border-radius:10px;
-    color:white;
-    margin:10px;
-}
-
-.progress{
-    height:15px;
-    background:#334155;
-    border-radius:10px;
-    overflow:hidden;
-}
-
-.bar{
-    height:100%;
-    width:0%;
-    background:linear-gradient(90deg,#22c55e,#06b6d4);
-}
-
-canvas{
-    width:100%;
-    height:150px;
-    margin-top:20px;
-}
-</style>
+        .glass-card { background: rgba(13, 17, 23, 0.9); backdrop-filter: blur(20px); border: 1px solid var(--neon); border-radius: 30px; padding: 30px; box-shadow: 0 0 40px rgba(0, 255, 204, 0.1); text-align: center; border-top: 5px solid var(--neon); }
+        .speed-val { font-size: 5.5rem; font-weight: 900; color: var(--neon); text-shadow: 0 0 25px var(--neon); margin: 5px 0; }
+        
+        .metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 25px 0; }
+        .m-box { background: var(--glass); padding: 15px; border-radius: 15px; border-top: 1px solid rgba(0,255,204,0.3); }
+        .m-label { font-size: 0.7rem; color: #888; margin-bottom: 5px; text-transform: uppercase; }
+        
+        button { background: transparent; border: 2px solid var(--neon); color: var(--neon); padding: 20px; width: 100%; border-radius: 50px; font-weight: 900; cursor: pointer; letter-spacing: 3px; transition: 0.4s; overflow: hidden; position: relative; }
+        button:hover { background: var(--neon); color: #000; box-shadow: 0 0 50px var(--neon); transform: scale(1.02); }
+        
+        #ai-box { margin-top: 30px; text-align: left; padding: 20px; background: rgba(0, 255, 204, 0.05); border-left: 4px solid var(--neon-pink); border-radius: 0 15px 15px 0; display: none; }
+        canvas { margin-top: 30px; background: rgba(0,0,0,0.4); border-radius: 25px; padding: 15px; border: 1px solid #1f2937; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap" rel="stylesheet">
 </head>
-
 <body>
+    <div class="grid-bg"></div>
+    <div class="app">
+        <div class="lang-control">
+            <span class="lang-label">AUTO-DETECTED LANGUAGE</span>
+            <select id="lang-menu">
+                <option value="ja">🇯🇵 日本語</option>
+                <option value="en">🇺🇸 English</option>
+                <option value="zh">🇨🇳 中国語</option>
+                <option value="hi">🇮🇳 हिन्दी</option>
+                <option value="es">🇪🇸 Español</option>
+                <option value="ar">🇸🇦 العربية</option>
+                <option value="fr">🇫🇷 Français</option>
+            </select>
+        </div>
 
-<div class="container">
-<h2>Speed Monitor</h2>
+        <div class="glass-card">
+            <div id="ui-status" style="font-size: 0.7rem; color: var(--neon-pink); font-weight: bold;"></div>
+            <div id="speed-display" class="speed-val">0.0</div>
+            <div style="color: var(--neon); font-size: 1.2rem; letter-spacing: 5px; margin-bottom: 20px;">MBPS</div>
 
-<div>Ping</div>
-<div class="value" id="ping">-- ms</div>
+            <div class="metrics">
+                <div class="m-box"><div id="ui-ping" class="m-label"></div><div id="res-ping" style="color:var(--neon); font-weight: bold;">--</div></div>
+                <div class="m-box"><div id="ui-jitter" class="m-label"></div><div id="res-jitter" style="color:var(--neon); font-weight: bold;">--</div></div>
+                <div class="m-box"><div id="ui-grade" class="m-label"></div><div id="res-grade" style="color:var(--neon-pink); font-weight: bold;">--</div></div>
+            </div>
 
-<div>Download</div>
-<div class="value" id="download">0 Mbps</div>
-<div class="progress"><div class="bar" id="downBar"></div></div>
-
-<div>Upload</div>
-<div class="value" id="upload">0 Mbps</div>
-<div class="progress"><div class="bar" id="upBar"></div></div>
-
-<button onclick="startTest()">測定開始</button>
-
-<canvas id="chart"></canvas>
-</div>
+            <button id="run-btn"></button>
+            <div id="ai-box">
+                <b id="ui-ai-head" style="color:var(--neon)"></b><br>
+                <span id="ai-text" style="font-size: 0.85rem; line-height: 1.6;"></span>
+            </div>
+        </div>
+        <canvas id="chart"></canvas>
+    </div>
 
 <script>
-const ctx = document.getElementById('chart').getContext('2d');
+    const i18n = {
+        ja: { status: "システム: オンライン", run: "分析エンジン起動", ping: "応答速度", jitter: "ブレ", grade: "評価", ai: "🤖 AI診断レポート:", s_msg: "驚異的な帯域です。AIの大規模学習データの同期に完全対応しています。", a_msg: "良好。クラウドAIとのリアルタイム通信に十分な品質です。" },
+        en: { status: "SYSTEM: ONLINE", run: "BOOT ANALYZER", ping: "Latency", jitter: "Jitter", grade: "Grade", ai: "🤖 AI DIAGNOSIS:", s_msg: "Incredible bandwidth. Fully compatible with large-scale AI training sync.", a_msg: "Good quality. Sufficient for real-time cloud AI communication." },
+        zh: { status: "系统: 在线", run: "启动分析引擎", ping: "延迟", jitter: "抖动", grade: "等级", ai: "🤖 AI 诊断报告:", s_msg: "带宽惊人。完全支持大规模 AI 学习数据的同步。", a_msg: "良好。足以满足云端 AI 的实时通信需求。" },
+        hi: { status: "सिस्टम: ऑनलाइन", run: "विश्लेषक शुरू करें", ping: "पिंग", jitter: "जिटर", grade: "ग्रेड", ai: "🤖 AI निदान रिपोर्ट:", s_msg: "अविश्वसनीय बैंडविड्थ। AI प्रशिक्षण सिंक के लिए पूरी तरह से अनुकूल।", a_msg: "अच्छी गुणवत्ता। क्लाउड AI संचार के लिए पर्याप्त।" },
+        es: { status: "SISTEMA: EN LÍNEA", run: "INICIAR ANALIZADOR", ping: "Latencia", jitter: "Jitter", grade: "Grado", ai: "🤖 INFORME DE IA:", s_msg: "Ancho de banda increíble. Totalmente compatible con el entrenamiento de IA.", a_msg: "Buena calidad. Suficiente para comunicación de IA en la nube." },
+        ar: { status: "النظام: متصل", run: "بدء التحليل", ping: "الاستجابة", jitter: "التقطع", grade: "التقييم", ai: "🤖 تقرير الذكاء الاصطناعي:", s_msg: "نطاق ترددي مذهل. متوافق تمامًا مع مزامنة بيانات تدريب الذكاء الاصطناعي.", a_msg: "جودة جيدة. كافية لاتصالات الذكاء الاصطناعي السحابية." },
+        fr: { status: "SYSTÈME: EN LIGNE", run: "LANCER L'ANALYSE", ping: "Latence", jitter: "Gigue", grade: "Grade", ai: "🤖 RAPPORT D'IA:", s_msg: "Bande passante incroyable. Idéal pour l'apprentissage profond de l'IA.", a_msg: "Bonne qualité. Suffisant pour l'IA en temps réel." }
+    };
 
-let data = [];
+    const firebaseConfig = {
+        apiKey: "AIzaSyAkYJBtlTBsW5vFw_yPmyzJdir1FJ9anx8",
+        databaseURL: "https://network-597fd-default-rtdb.firebaseio.com/",
+        projectId: "network-597fd"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-function drawGraph(){
-    ctx.clearRect(0,0,500,150);
-    ctx.beginPath();
-    ctx.moveTo(0,150);
-    data.forEach((v,i)=>{
-        ctx.lineTo(i*10,150 - v*2);
-    });
-    ctx.strokeStyle="#06b6d4";
-    ctx.stroke();
-}
-
-async function pingTest(){
-    let start = performance.now();
-    await fetch("https://speed.cloudflare.com/cdn-cgi/trace?t=" + Math.random());
-    let end = performance.now();
-    document.getElementById("ping").innerText = Math.floor(end-start)+" ms";
-}
-
-async function downloadTest(){
-    const url = "https://speed.cloudflare.com/__down?bytes=20000000&t=" + Math.random();
-    const res = await fetch(url);
-    const reader = res.body.getReader();
-
-    let received = 0;
-    let total = 20000000;
-    let start = performance.now();
-    let last = start;
-    let lastBytes = 0;
-
-    while(true){
-        const {done,value} = await reader.read();
-        if(done) break;
-        received += value.length;
-
-        let now = performance.now();
-        if(now-last>=1000){
-            let speed = ((received-lastBytes)*8)/((now-last)/1000)/1000000;
-            document.getElementById("download").innerText = speed.toFixed(2)+" Mbps";
-            document.getElementById("downBar").style.width=(received/total*100)+"%";
-            data.push(speed);
-            drawGraph();
-            last = now;
-            lastBytes = received;
+    let currentLang = 'ja';
+    
+    // --- 言語自動判別ロジック ---
+    function detectLanguage() {
+        const browserLang = navigator.language.split('-')[0]; // "en-US" -> "en"
+        if (i18n[browserLang]) {
+            currentLang = browserLang;
+            document.getElementById('lang-menu').value = browserLang;
         }
     }
-}
 
-async function uploadTest(){
-    let dataSize = new Uint8Array(5_000_000);
-    let start = performance.now();
-    await fetch("https://httpbin.org/post?t="+Math.random(),{
-        method:"POST",
-        body:dataSize
+    function updateUI() {
+        const t = i18n[currentLang];
+        document.getElementById('ui-status').textContent = t.status;
+        document.getElementById('run-btn').textContent = t.run;
+        document.getElementById('ui-ping').textContent = t.ping;
+        document.getElementById('ui-jitter').textContent = t.jitter;
+        document.getElementById('ui-grade').textContent = t.grade;
+        document.getElementById('ui-ai-head').textContent = t.ai;
+    }
+
+    document.getElementById('lang-menu').onchange = (e) => {
+        currentLang = e.target.value;
+        updateUI();
+    };
+
+    const chart = new Chart(document.getElementById('chart'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Mbps', borderColor: '#00ffcc', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(0, 255, 204, 0.05)' }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#1f2937' } }, x: { grid: { display: false } } } }
     });
-    let end = performance.now();
-    let speed = (dataSize.length*8)/((end-start)/1000)/1000000;
-    document.getElementById("upload").innerText = speed.toFixed(2)+" Mbps";
-    document.getElementById("upBar").style.width="100%";
-}
 
-async function startTest(){
-    data=[];
-    await pingTest();
-    await downloadTest();
-    await uploadTest();
-}
+    db.ref("scores").limitToLast(12).on("value", snap => {
+        const labels = [], data = [];
+        snap.forEach(c => {
+            labels.push(new Date(c.val().timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+            data.push(c.val().speed);
+        });
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    });
+
+    document.getElementById('run-btn').onclick = async () => {
+        const btn = document.getElementById('run-btn');
+        btn.disabled = true;
+        const startP = performance.now();
+        await fetch("https://speed.cloudflare.com/cdn-cgi/trace", {mode:'no-cors'});
+        const ping = performance.now() - startP;
+        document.getElementById('res-ping').textContent = ping.toFixed(0) + "ms";
+
+        const startS = performance.now();
+        const res = await fetch("https://speed.cloudflare.com/__down?bytes=10000000&t="+Date.now());
+        const reader = res.body.getReader();
+        let loaded = 0;
+        while(true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            loaded += value.length;
+            const m = (loaded * 8) / ((performance.now() - startS) / 1000 * 1000000);
+            document.getElementById('speed-display').textContent = m.toFixed(1);
+        }
+        const final = parseFloat(document.getElementById('speed-display').textContent);
+        
+        const g = final > 300 ? "S" : "A";
+        document.getElementById('res-grade').textContent = g;
+        document.getElementById('ai-box').style.display = "block";
+        document.getElementById('ai-text').textContent = g === "S" ? i18n[currentLang].s_msg : i18n[currentLang].a_msg;
+
+        await db.ref("scores").push({ speed: final, timestamp: Date.now() });
+        btn.disabled = false;
+    };
+
+    // 初期化実行
+    detectLanguage();
+    updateUI();
 </script>
-
 </body>
 </html>
