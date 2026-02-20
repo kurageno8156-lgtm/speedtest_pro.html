@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>KDSNCC | NETWORK SCANNER v2</title>
+    <style>
+        :root { --neon: #00ffcc; --pink: #ff0055; --bg: #05070a; }
+        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; }
+        .container { max-width: 500px; margin: 20px auto; padding: 20px; border: 1px solid var(--neon); box-shadow: 0 0 20px rgba(0,255,204,0.2); }
+        
+        .name-section { margin-bottom: 20px; padding: 15px; background: rgba(0, 255, 204, 0.05); border-radius: 10px; border: 1px solid #222; }
+        label { display: block; font-size: 0.7rem; margin-bottom: 8px; color: var(--neon); letter-spacing: 2px; }
+        input[type="text"] { background: #000; border: 1px solid var(--neon); color: #fff; padding: 12px; border-radius: 5px; width: 80%; text-align: center; font-size: 1rem; outline: none; }
+        input[type="text"]:disabled { border-color: #444; color: #888; cursor: not-allowed; background: #111; }
+
+        #display { font-size: 1.2rem; margin: 25px 0; min-height: 3.5em; padding: 15px; border: 1px double #333; display: flex; align-items: center; justify-content: center; }
+        .btn { background: var(--neon); border: none; padding: 12px 40px; cursor: pointer; font-weight: bold; border-radius: 5px; transition: 0.3s; }
+        .btn:disabled { background: #222; cursor: not-allowed; color: #555; }
+        
+        #timer { color: var(--pink); font-size: 0.9rem; margin-top: 15px; min-height: 1.2em; }
+        .lock-msg { font-size: 0.7rem; color: #ffaa00; margin-top: 5px; }
+
+        .ranking-table { width: 100%; margin-top: 30px; border-collapse: collapse; font-size: 0.85rem; }
+        .ranking-table th, .ranking-table td { border: 1px solid #222; padding: 12px; }
+        .ranking-table th { background: rgba(0,255,204,0.1); color: var(--neon); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>KDSNCC SCANNER v2</h1>
+    
+    <div class="name-section">
+        <label>SYSTEM IDENTIFICATION</label>
+        <input type="text" id="user-name" placeholder="AGENT NAME" value="Player1">
+        <div id="lock-notice" class="lock-msg"></div>
+    </div>
+
+    <div id="display">スキャン待機中...</div>
+    <button id="measure-btn" class="btn" onclick="startMeasurement()">計測開始</button>
+    <div id="timer"></div>
+
+    <h3>🏆 TOP AGENTS (RANKING)</h3>
+    <table class="ranking-table">
+        <thead>
+            <tr><th>順位</th><th>名前</th><th>スコア (ms)</th></tr>
+        </thead>
+        <tbody id="ranking-body"></tbody>
+    </table>
+</div>
+
+<script>
+    const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間
+
+    let ranking = JSON.parse(localStorage.getItem('kdsncc_ranking')) || [];
+    let activeSession = JSON.parse(localStorage.getItem('kdsncc_session')) || null;
+
+    updateRankingDisplay();
+    checkStatus();
+    setInterval(checkStatus, 1000);
+
+    function startMeasurement() {
+        const nameInput = document.getElementById('user-name');
+        const name = nameInput.value.trim();
+        
+        if (!name) {
+            alert("名前を入力してください。");
+            return;
+        }
+
+        const display = document.getElementById('display');
+        display.innerText = "プロトコル実行中...";
+        document.getElementById('measure-btn').disabled = true;
+        nameInput.disabled = true;
+        
+        setTimeout(() => {
+            const score = (Math.random() * 400 + 50).toFixed(2);
+            display.innerHTML = `計測完了!<br>RESULT: <span style="color:var(--pink)">${score} ms</span>`;
+            
+            saveScore(name, score);
+            
+            activeSession = {
+                name: name,
+                unlockTime: Date.now() + COOLDOWN_TIME
+            };
+            localStorage.setItem('kdsncc_session', JSON.stringify(activeSession));
+            
+            checkStatus();
+        }, 1500);
+    }
+
+    function checkStatus() {
+        const nameInput = document.getElementById('user-name');
+        const btn = document.getElementById('measure-btn');
+        const timerDisplay = document.getElementById('timer');
+        const lockNotice = document.getElementById('lock-notice');
+
+        if (!activeSession) {
+            nameInput.disabled = false;
+            btn.disabled = false;
+            timerDisplay.innerText = "新規計測が可能です";
+            lockNotice.innerText = "";
+            return;
+        }
+
+        const now = Date.now();
+        const remaining = activeSession.unlockTime - now;
+
+        if (remaining > 0) {
+            nameInput.value = activeSession.name; 
+            nameInput.disabled = true;
+            btn.disabled = true;
+
+            const min = Math.floor(remaining / 1000 / 60);
+            const sec = Math.floor((remaining / 1000) % 60);
+            timerDisplay.innerText = `再計測まで: ${min}分${sec}秒`;
+            lockNotice.innerText = "⚠ 計測完了までユーザー名の変更不可";
+        } else {
+            activeSession = null;
+            localStorage.removeItem('kdsncc_session');
+            nameInput.disabled = false;
+            btn.disabled = false;
+            timerDisplay.innerText = "計測制限が解除されました";
+            lockNotice.innerText = "";
+        }
+    }
+
+    function saveScore(name, score) {
+        ranking.push({ name: name, score: parseFloat(score) });
+        ranking.sort((a, b) => a.score - b.score);
+        ranking = ranking.slice(0, 5);
+        localStorage.setItem('kdsncc_ranking', JSON.stringify(ranking));
+        updateRankingDisplay();
+    }
+
+    function updateRankingDisplay() {
+        const body = document.getElementById('ranking-body');
+        body.innerHTML = "";
+        ranking.forEach((entry, index) => {
+            body.innerHTML += `<tr><td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td></tr>`;
+        });
+    }
+</script>
+
+</body>
+</html>
